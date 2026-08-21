@@ -293,6 +293,7 @@
       if (lastTap && (now - lastTap.time) <= DBL_T &&
           Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) <= DBL_DIST) {
         lastTap = null;
+        lastDblTapPop = Date.now();    // 抑制本次手势派生的残余 click（见 isDblTapSyntheticClick）
         popPage();                       // 已在根页面时 popPage 内部自动忽略
       } else {
         lastTap = { time: now, x: e.clientX, y: e.clientY };
@@ -511,6 +512,7 @@
       const t = e.target.closest("[data-act]");
       if (!t) return;
       const act = t.dataset.act;
+      if (isDblTapSyntheticClick()) return;   // 双击返回后的残余 click，不触发任何操作
       if (isDragSyntheticClick(act)) return;   // 拖拽刚结束的合成点击，不触发导航
       if (act === "call") { confirmCall(t.dataset.tel); return; }
       if (act === "back") popPage();
@@ -620,6 +622,7 @@
       const t = e.target.closest("[data-act]");
       if (!t) return;
       const act = t.dataset.act;
+      if (isDblTapSyntheticClick()) return;   // 双击返回后的残余 click，不触发任何操作
       if (isDragSyntheticClick(act)) return;   // 拖拽刚结束的合成点击，不触发导航
       if (act === "call") { confirmCall(t.dataset.tel); return; }
       if (act === "back") popPage();
@@ -699,6 +702,7 @@
       const t = e.target.closest("[data-act]");
       if (!t) return;
       const act = t.dataset.act;
+      if (isDblTapSyntheticClick()) return;   // 双击返回后的残余 click，不触发任何操作
       if (act === "call") { confirmCall(t.dataset.tel); return; }
       if (act === "back") popPage();
       else if (act === "edit") openPersonForm(m, m.departmentId);
@@ -909,6 +913,13 @@
   const isDragSyntheticClick = (act) =>
     Date.now() - lastDragEnd < DRAG_CLICK_GUARD_MS &&
     (act === "open-dept" || act === "open-member" || act === "call" || act === "crumb");
+
+  // 双击空白返回后，浏览器仍会为同一手势派发残余 click；此时页面栈已变，
+  // 该 click 会落在上一页同坐标的交互元素上（部门行/成员行/返回键等），
+  // 若不抑制会立刻再次导航（“弹回后又弹入下一级”）。短时间内忽略一切 data-act 点击。
+  let lastDblTapPop = 0;
+  const DBLTAP_CLICK_GUARD_MS = 500;
+  const isDblTapSyntheticClick = () => Date.now() - lastDblTapPop < DBLTAP_CLICK_GUARD_MS;
   function reorderDept(parentId, ids) {
     ids.forEach((id, i) => { const d = getDept(id); if (d) d.sortOrder = i; });
     saveData(); haptic(10); toast("部门顺序已保存");
