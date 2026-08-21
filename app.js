@@ -33,12 +33,13 @@
   const ROOT_ID = "d_root";
 
   /* ---------------- 口令门禁 ---------------- */
-  // 解锁状态记在 sessionStorage：同一次浏览器会话内（含刷新）保持解锁，关闭标签页后失效
+  // 解锁状态记在 localStorage：同一设备解锁一次后，后续打开（含 PWA 桌面图标）不再要求口令；
+  // 仅当本机通讯录数据也被清除时才会重新要求口令（数据与解锁标记一同清除）。
   function isUnlocked() {
-    try { return sessionStorage.getItem(UNLOCK_KEY) === "1"; } catch (e) { return false; }
+    try { return localStorage.getItem(UNLOCK_KEY) === "1" && localStorage.getItem(STORAGE_KEY) != null; } catch (e) { return false; }
   }
   function setUnlocked() {
-    try { sessionStorage.setItem(UNLOCK_KEY, "1"); } catch (e) { /* 存储不可用时每次进入都要口令 */ }
+    try { localStorage.setItem(UNLOCK_KEY, "1"); } catch (e) { /* 存储不可用时每次进入都要口令 */ }
   }
 
   /* ---------------- 触觉反馈（Android 支持；iOS Safari 无此 API，自动忽略） ---------------- */
