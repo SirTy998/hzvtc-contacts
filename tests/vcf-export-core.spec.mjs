@@ -23,6 +23,8 @@ const browser = await chromium.launch({
 });
 const page = await browser.newPage({ viewport: { width: 420, height: 900 } });
 page.on("pageerror", (e) => console.log("[pageerror]", e.message));
+// 本测试固定走下载回退路径（分享面板无法在无头环境自动化）
+await page.addInitScript(() => { try { Object.defineProperty(Navigator.prototype, "canShare", { configurable: true, value: () => false }); } catch (e) {} });
 await server.listen(8902, "127.0.0.1");
 
 // 真实数据：全新上下文，走完整解锁流程

@@ -1206,19 +1206,32 @@
     return cards.join("\r\n") + "\r\n";
   }
 
-  /* 生成 .vcf 并触发下载 */
-  function exportVCard() {
+  /* 生成 .vcf 并交给系统（优先分享面板存文件；不支持时回退下载） */
+  const VCF_FILE_NAME = "杭州职业技术大学通讯录.vcf";
+  async function exportVCard() {
     if (!members.length) { toast("暂无联系人可导出"); return; }
     const blob = new Blob([buildVCard()], { type: "text/vcard;charset=utf-8" });
+    // iOS 15+ / Android：打开系统分享面板，可选择“存储到文件”，文件不会直接跳进通讯录
+    try {
+      const file = new File([blob], VCF_FILE_NAME, { type: blob.type });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file] });
+        toast("请在分享面板选择“存储到文件”，再从“文件”中打开 .vcf 导入通讯录");
+        return;
+      }
+    } catch (e) {
+      if (e && e.name === "AbortError") return;   // 用户取消分享
+      // 其他异常回退到下载
+    }
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "杭州职业技术大学通讯录.vcf";
+    a.download = VCF_FILE_NAME;
     document.body.appendChild(a);
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
-    toast("通讯录文件已生成，请在“下载/文件”中打开，按系统提示添加到通讯录");
+    toast("通讯录文件已生成并保存到“下载”，请在“文件”App 中打开导入");
   }
 
   /* 导出菜单：Excel / 手机通讯录 */
@@ -1236,7 +1249,7 @@
       if (a === "export-vcf") {
         closeModal(mask);
         confirmDialog("导出到手机通讯录",
-          `将生成通讯录文件（共 ${members.length} 人），在手机“下载/文件”中打开即可导入系统通讯录。再次导入时，若系统提示“更新现有联系人/新建联系人”，请选择“更新”，即可避免重复新建。`,
+          `将生成通讯录文件（共 ${members.length} 人）。确认后请在系统面板选择“存储到文件”，再从“文件”中打开该 .vcf 导入通讯录；若提示“更新现有联系人/新建联系人”，请选择“更新”，即可避免重复新建。`,
           exportVCard);
       }
     });
