@@ -21,6 +21,7 @@
     grip:   '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/></svg>',
     sort:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 20V4M8 4l-3 3M8 4l3 3"/><path d="M16 4v16M16 20l-3-3M16 20l3-3"/></svg>',
     list:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1.4" fill="currentColor" stroke="none"/><circle cx="4" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="4" cy="18" r="1.4" fill="currentColor" stroke="none"/></svg>',
+    contact:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4.6 19.3c1.4-5.1 4.5-7.3 7.4-7.3s6 2.2 7.4 7.3a1 1 0 0 1-1 1.3H5.6a1 1 0 0 1-1-1.3Z"/><circle cx="12" cy="8.2" r="4.2"/></svg>',
   };
 
   const PALETTE = ["#fa8c16","#52c41a","#1677ff","#722ed1","#13c2c2","#eb2f96","#fa541c","#2f54eb","#eb5757","#27ae60"];
@@ -520,7 +521,7 @@
       else if (act === "add-person") openPersonForm(null, null);
       else if (act === "toggle-sort") { ctx.sortingMode = !ctx.sortingMode; ctx.renderList(); syncSortBtn(); }
       else if (act === "import") triggerImport();
-      else if (act === "export") exportExcel();
+      else if (act === "export") openExportSheet();
       else if (act === "history-item") { ctx.keyword = t.dataset.kw; el.querySelector("#searchInput").value = t.dataset.kw; ctx.renderList(); renderSearchHistory(ctx, el); }
       else if (act === "clear-history") { clearSearchHistory(); renderSearchHistory(ctx, el); }
       else if (act === "open-dept") { if (ctx.keyword) addSearchHistory(ctx.keyword); openMemberList(t.dataset.id); }
@@ -1155,6 +1156,83 @@
     XLSX.utils.book_append_sheet(wb, ws, "通讯录");
     XLSX.writeFile(wb, "通讯录_杭州职业技术大学.xlsx");
     toast("已导出 Excel");
+  }
+
+  /* vCard 工具：转义 + UTF-8 安全折行（RFC 6350：物理行 ≤75 字节） */
+  const vcfEscape = (s) => String(s == null ? "" : s)
+    .replace(/\\/g, "\\\\").replace(/,/g, "\\,").replace(/;/g, "\\;").replace(/\r?\n/g, "\\n");
+  function vcfFold(text) {
+    const bytes = new TextEncoder().encode(text);
+    const out = [];
+    let start = 0;
+    while (start < bytes.length) {
+      let end = Math.min(start + 74, bytes.length);
+      if (end < bytes.length) {
+        while (end > start && (bytes[end] & 0xC0) === 0x80) end--; // 不在多字节字符中间断行
+      }
+      out.push(new TextDecoder().decode(bytes.slice(start, end)));
+      start = end;
+    }
+    return out.join("\r\n ");
+  }
+
+  /* 生成完整 vCard 文本（全部成员） */
+  function buildVCard() {
+    const root = getDept(ROOT_ID);
+    const org = root ? root.name : "杭州职业技术大学";
+    const cards = members.map((m) => {
+      const dept = getDept(m.departmentId);
+      const lines = [
+        "BEGIN:VCARD",
+        "VERSION:3.0",
+        "UID:hzvtc-" + m.id + "@hzvtc-contacts",
+        "FN:" + vcfEscape(m.name),
+        "N:" + vcfEscape(m.name) + ";;;;",
+      ];
+      if (m.position) lines.push("TITLE:" + vcfEscape(m.position));
+      lines.push("ORG:" + vcfEscape(org) + ";" + (dept ? vcfEscape(dept.name) : ""));
+      if (m.mobilePhone) lines.push("TEL;TYPE=CELL:" + m.mobilePhone);
+      if (m.officePhone) lines.push("TEL;TYPE=WORK,VOICE:" + m.officePhone);
+      lines.push("END:VCARD");
+      return lines.map(vcfFold).join("\r\n");
+    });
+    return cards.join("\r\n") + "\r\n";
+  }
+
+  /* 生成 .vcf 并触发下载 */
+  function exportVCard() {
+    if (!members.length) { toast("暂无联系人可导出"); return; }
+    const blob = new Blob([buildVCard()], { type: "text/vcard;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "杭州职业技术大学通讯录.vcf";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast("通讯录文件已生成，请在“下载/文件”中打开，按系统提示添加到通讯录");
+  }
+
+  /* 导出菜单：Excel / 手机通讯录 */
+  function openExportSheet() {
+    const mask = openModal(`
+      <button class="sheet-item" data-act="export-excel">${ICON.file}导出 Excel</button>
+      <button class="sheet-item" data-act="export-vcf">${ICON.contact}导出到手机通讯录（.vcf）</button>
+      <button class="sheet-cancel" data-act="cancel">取消</button>`, () => {});
+    mask.addEventListener("click", (e) => {
+      const act = e.target.closest("[data-act]");
+      if (!act) return;
+      const a = act.dataset.act;
+      if (a === "cancel") return closeModal(mask);
+      if (a === "export-excel") { closeModal(mask); exportExcel(); }
+      if (a === "export-vcf") {
+        closeModal(mask);
+        confirmDialog("导出到手机通讯录",
+          `将生成通讯录文件（共 ${members.length} 人），在手机“下载/文件”中打开即可导入系统通讯录。再次导入时，若系统提示“更新现有联系人/新建联系人”，请选择“更新”，即可避免重复新建。`,
+          exportVCard);
+      }
+    });
   }
 
   /* ---------------- 状态栏时钟 ---------------- */
