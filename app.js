@@ -35,9 +35,15 @@
 
   /* ---------------- 口令门禁 ---------------- */
   // 解锁状态记在 localStorage：同一设备解锁一次后，后续打开（含 PWA 桌面图标）不再要求口令；
-  // 仅当本机通讯录数据也被清除时才会重新要求口令（数据与解锁标记一同清除）。
+  // 仅当本机通讯录数据不可用（清除/损坏/缺根部门）时才会重新要求口令，解锁后自动重写有效数据。
   function isUnlocked() {
-    try { return localStorage.getItem(UNLOCK_KEY) === "1" && localStorage.getItem(STORAGE_KEY) != null; } catch (e) { return false; }
+    try {
+      if (localStorage.getItem(UNLOCK_KEY) !== "1") return false;
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return false;
+      const d = JSON.parse(raw);
+      return Array.isArray(d.departments) && d.departments.some((x) => x.id === ROOT_ID);
+    } catch (e) { return false; }
   }
   function setUnlocked() {
     try { localStorage.setItem(UNLOCK_KEY, "1"); } catch (e) { /* 存储不可用时每次进入都要口令 */ }
@@ -56,7 +62,8 @@
         const d = JSON.parse(raw);
         departments = d.departments || [];
         members = d.members || [];
-        if (departments.length) return;
+        // 仅接受含根部门的有效数据，否则走锁屏重解密，避免白屏崩溃
+        if (departments.length && departments.some((x) => x.id === ROOT_ID)) return;
       } catch (e) { /* 损坏则重置 */ }
     }
     // 无本地数据时：
