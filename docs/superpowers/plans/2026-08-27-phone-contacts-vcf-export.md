@@ -287,7 +287,7 @@ const unfolded = text.replace(/\r\n /g, "");
 const cards = unfolded.split("BEGIN:VCARD").slice(1);
 check("合成数据导出 2 条记录", cards.length === 2);
 const c1 = cards[0];
-check("FN 转义逗号", c1.includes("FN:测\\,试;员\\甲"));
+check("FN 转义逗号/分号/反斜杠", c1.includes("FN:测\\,试\\;员\\\\甲"));
 check("N 转义分号与反斜杠", c1.includes("N:测\\,试\\;员\\\\甲;;;;"));
 check("TITLE 转义并保留换行转义", c1.includes("TITLE:主任\\,兼\\n副处长"));
 check("手机/办公电话均导出", c1.includes("TEL;TYPE=CELL:13800138000") && c1.includes("TEL;TYPE=WORK,VOICE:56700001"));
