@@ -22,6 +22,7 @@
     sort:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 20V4M8 4l-3 3M8 4l3 3"/><path d="M16 4v16M16 20l-3-3M16 20l3-3"/></svg>',
     list:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1.4" fill="currentColor" stroke="none"/><circle cx="4" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="4" cy="18" r="1.4" fill="currentColor" stroke="none"/></svg>',
     contact:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4.6 19.3c1.4-5.1 4.5-7.3 7.4-7.3s6 2.2 7.4 7.3a1 1 0 0 1-1 1.3H5.6a1 1 0 0 1-1-1.3Z"/><circle cx="12" cy="8.2" r="4.2"/></svg>',
+    copy:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>',
   };
 
   const PALETTE = ["#fa8c16","#52c41a","#1677ff","#722ed1","#13c2c2","#eb2f96","#fa541c","#2f54eb","#eb5757","#27ae60"];
@@ -719,6 +720,7 @@
       else if (act === "open-dept") openMemberList(m.departmentId);
     });
 
+    bindNumberLongPress(el);
     pushPage(el);
   }
 
@@ -912,6 +914,71 @@
       if (act.dataset.act === "cancel") return closeModal(mask);
       if (act.dataset.act === "ok") { closeModal(mask); haptic(12); doCall(number); }
     });
+  }
+
+  /* ---------------- 号码复制（长按号码弹复制菜单） ---------------- */
+  // 抑制长按松手后由同一手势派发的合成 click（避免误触发拨打或关闭刚弹出的菜单）
+  function suppressNextClick() {
+    let timer = 0;
+    const guard = (e) => { e.stopPropagation(); e.preventDefault(); cleanup(); };
+    const cleanup = () => { document.removeEventListener("click", guard, true); clearTimeout(timer); };
+    timer = setTimeout(cleanup, 800);
+    document.addEventListener("click", guard, true);
+  }
+  function copyText(text) {
+    const ok = () => { haptic(12); toast("号码已复制"); };
+    const fallback = () => {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.cssText = "position:fixed;top:0;left:0;opacity:0;pointer-events:none";
+      document.body.appendChild(ta);
+      ta.focus(); ta.select();
+      try { document.execCommand("copy") ? ok() : toast("复制失败，请手动复制"); }
+      catch (e) { toast("复制失败，请手动复制"); }
+      ta.remove();
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(ok).catch(fallback);
+    } else fallback();
+  }
+  function openNumberSheet(number) {
+    const mask = openModal(`
+      <div class="sheet-number">${esc(number)}</div>
+      <button class="sheet-item" data-act="copy-number">${ICON.copy}复制号码</button>
+      <button class="sheet-cancel" data-act="cancel">取消</button>`, () => {});
+    mask.addEventListener("click", (e) => {
+      const act = e.target.closest("[data-act]");
+      if (!act) return;
+      if (act.dataset.act === "cancel") return closeModal(mask);
+      if (act.dataset.act === "copy-number") { closeModal(mask); copyText(number); }
+    });
+  }
+  // 长按详情页号码文本（工作手机/固定电话）→ 弹出复制菜单
+  function bindNumberLongPress(el) {
+    const MS = 500, MOVE_TOL = 10;
+    let timer = 0, px = 0, py = 0, pid = null, fired = false;
+    const clear = () => { clearTimeout(timer); timer = 0; pid = null; fired = false; };
+    el.addEventListener("pointerdown", (e) => {
+      const num = e.target.closest('.info-value.link[data-act="call"]');
+      if (!num || !num.dataset.tel) return;
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      if (pid != null && pid !== e.pointerId) { clear(); return; }   // 多点触控作废
+      pid = e.pointerId; px = e.clientX; py = e.clientY; fired = false;
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        fired = true;
+        haptic(12);
+        suppressNextClick();
+        openNumberSheet(num.dataset.tel);
+      }, MS);
+    }, true);
+    el.addEventListener("pointermove", (e) => {
+      if (e.pointerId !== pid || fired) return;
+      if (Math.hypot(e.clientX - px, e.clientY - py) > MOVE_TOL) clear();
+    }, true);
+    el.addEventListener("pointerup", (e) => { if (e.pointerId === pid) clear(); }, true);
+    el.addEventListener("pointercancel", (e) => { if (e.pointerId === pid) clear(); }, true);
   }
 
   /* ---------------- 拖拽排序（指针事件，兼容触摸/鼠标） ---------------- */

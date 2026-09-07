@@ -473,6 +473,10 @@ mark.match {
   background: var(--bg-card); border-radius: var(--r-md);
   box-shadow: var(--shadow-card);
 }
+.sheet-number {
+  font-size: 18px; font-weight: 600; color: var(--label-1);
+  text-align: center; padding: 4px 0 16px; letter-spacing: .3px;
+}
 
 /* ============================================================
    Toast
