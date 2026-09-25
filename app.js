@@ -30,6 +30,7 @@
   /* ---------------- 状态 ---------------- */
   const STORAGE_KEY = "hzvtc_contacts_v2";
   const UNLOCK_KEY = "hzvtc_unlocked_v1";
+  const DATA_VERSION = "2026-09-25";
   let departments = [];
   let members = [];
   const ROOT_ID = "d_root";
@@ -43,7 +44,9 @@
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return false;
       const d = JSON.parse(raw);
-      return Array.isArray(d.departments) && d.departments.some((x) => x.id === ROOT_ID);
+      return d.version === DATA_VERSION &&
+        Array.isArray(d.departments) &&
+        d.departments.some((x) => x.id === ROOT_ID);
     } catch (e) { return false; }
   }
   function setUnlocked() {
@@ -64,7 +67,7 @@
         departments = d.departments || [];
         members = d.members || [];
         // 仅接受含根部门的有效数据，否则走锁屏重解密，避免白屏崩溃
-        if (departments.length && departments.some((x) => x.id === ROOT_ID)) return;
+        if (d.version === DATA_VERSION && departments.length && departments.some((x) => x.id === ROOT_ID)) return;
       } catch (e) { /* 损坏则重置 */ }
     }
     // 无本地数据时：
@@ -79,7 +82,7 @@
     }
   }
   function saveData() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ departments, members }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: DATA_VERSION, departments, members }));
   }
 
   /* 用口令解密种子数据（口令即钥匙：解密成功 = 口令正确，口令本身不写入代码） */

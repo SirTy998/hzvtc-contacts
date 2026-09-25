@@ -18,6 +18,7 @@ let failures = 0;
 const check = (name, cond) => { console.log((cond ? "PASS" : "FAIL") + " - " + name); if (!cond) failures++; };
 
 const seed = {
+  version: "2026-09-25",
   departments: [
     { id: "d_root", name: "杭州职业技术大学", parentId: null },
     { id: "d_1", name: "校领导", parentId: "d_root", sortOrder: 0 },

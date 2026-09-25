@@ -45,6 +45,11 @@ const validOld = JSON.stringify({
   departments: [{ id: "d_root", name: "杭州职业技术大学", parentId: null }, { id: "d_1", name: "校领导", parentId: "d_root", sortOrder: 0 }],
   members: [{ id: "m_1", name: "测试", position: "职务", departmentId: "d_1", mobilePhone: "13800138000", officePhone: "", avatarColor: "#fa8c16", sortOrder: 0 }],
 });
+const validCurrent = JSON.stringify({
+  version: "2026-09-25",
+  departments: [{ id: "d_root", name: "杭州职业技术大学", parentId: null }, { id: "d_1", name: "校领导", parentId: "d_root", sortOrder: 0 }],
+  members: [{ id: "m_1", name: "测试", position: "职务", departmentId: "d_1", mobilePhone: "13800138000", officePhone: "", avatarColor: "#fa8c16", sortOrder: 0 }],
+});
 
 // 1) flag=1 + 空数据：不得白屏，应回锁屏并可解锁恢复
 let r = await bootWith(JSON.stringify({ departments: [], members: [] }));
@@ -61,12 +66,17 @@ r = await bootWith(JSON.stringify({ departments: [{ id: "root_x", name: "旧结�
 check("缺根部门：无崩溃", r.errors.length === 0);
 check("缺根部门：显示锁屏", r.st.lockVisible === true);
 
-// 4) flag=1 + 有效数据：正常免口令直接进入
+// 4) flag=1 + 缺少数据版本的旧有效数据：必须回锁屏，避免一直使用已下线的旧通讯录
 r = await bootWith(validOld);
-check("有效数据：无崩溃", r.errors.length === 0);
-check("有效数据：直接进入（无锁屏）", r.st.lockVisible === false && r.st.pages === 1 && r.st.rootRows === 1);
+check("旧版本数据：无崩溃", r.errors.length === 0);
+check("旧版本数据：回锁屏待同步", r.st.lockVisible === true);
 
-// 5) 锁屏输入正确口令后，应用恢复正常（空数据场景）
+// 5) flag=1 + 当前版本有效数据：正常免口令直接进入
+r = await bootWith(validCurrent);
+check("当前版本数据：无崩溃", r.errors.length === 0);
+check("当前版本数据：直接进入（无锁屏）", r.st.lockVisible === false && r.st.pages === 1 && r.st.rootRows === 1);
+
+// 6) 锁屏输入正确口令后，应用恢复并写入当前版本数据（空数据场景）
 const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
 await context.addInitScript((v) => {
   localStorage.setItem("hzvtc_unlocked_v1", "1");
@@ -83,8 +93,10 @@ const recovered = await page.evaluate(() => ({
   lockHidden: document.getElementById("lockScreen")?.hidden ?? null,
   pages: document.querySelectorAll("#screen > .page").length,
   rootRows: document.querySelectorAll('[data-act="open-dept"]').length,
+  storedVersion: JSON.parse(localStorage.getItem("hzvtc_contacts_v2") || "{}").version,
 }));
 check("解锁后应用恢复（42 部门）", recovered.lockHidden === true && recovered.pages === 1 && recovered.rootRows === 42);
+check("解锁后本地数据写入当前版本", recovered.storedVersion === "2026-09-25");
 await context.close();
 
 await browser.close();
