@@ -55,8 +55,10 @@ check("下载文件名正确", download.suggestedFilename() === "杭州职业技
 
 const text = fs.readFileSync(await download.path(), "utf8");
 const cards = text.split("BEGIN:VCARD").slice(1);
-check("包含全部 107 名成员", cards.length === 107);
+check("包含全部 935 名成员", cards.length === 935);
 check("首条成员字段完整", cards[0].includes("FN:陈文岳") && cards[0].includes("N:陈文岳;;;;") && cards[0].includes("TITLE:党委书记") && cards[0].includes("ORG:杭州职业技术大学;校领导") && cards[0].includes("TEL;TYPE=CELL:13588811505") && cards[0].includes("TEL;TYPE=WORK,VOICE:56700066"));
+const multiOfficeCard = cards.find((card) => card.includes("FN:张理剑"));
+check("多校区固定电话逐条导出", multiOfficeCard?.includes("TEL;TYPE=WORK,VOICE:56700913") && multiOfficeCard?.includes("TEL;TYPE=WORK,VOICE:56665175"));
 check("每条记录以 END:VCARD 结束", cards.every((c) => c.includes("END:VCARD")));
 check("所有物理行 ≤75 字节", text.split(/\r\n|\n/).every((line) => Buffer.byteLength(line, "utf8") <= 75));
 

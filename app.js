@@ -192,6 +192,11 @@
   function avatarLen(name) { return avatarText(name).length; }
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  // 固定电话字段可展示多个校区号码；拨号取第一个可拨号码，vCard 导出全部号码。
+  const phoneTargets = (value) => {
+    const matches = String(value || "").replace(/['’‘]/g, "").match(/\d{5,}/g) || [];
+    return [...new Set(matches)];
+  };
 
   /* ---------------- 搜索历史 ---------------- */
   const HISTORY_KEY = "hzvtc_search_history_v1";
@@ -665,6 +670,7 @@
     const dept = getDept(m.departmentId);
     const color = m.avatarColor || pickColor(members.indexOf(m));
     const schoolName = getDept(ROOT_ID).name;
+    const officeTel = phoneTargets(m.officePhone)[0] || "";
 
     el.innerHTML = `
       <div class="appbar">
@@ -700,9 +706,9 @@
           </div>
           <div class="info-row">
             <span class="info-label">固定电话</span>
-            <span class="info-value ${m.officePhone ? "link" : ""}" ${m.officePhone ? `data-act="call" data-tel="${esc(m.officePhone)}"` : ""}>${esc(m.officePhone || "—")}</span>
+            <span class="info-value ${officeTel ? "link" : ""}" ${officeTel ? `data-act="call" data-tel="${esc(officeTel)}" data-copy="${esc(m.officePhone)}"` : ""}>${esc(m.officePhone || "—")}</span>
             <span class="info-actions">
-              ${m.officePhone ? `<span class="row-icon call" data-act="call" data-tel="${esc(m.officePhone)}" title="拨打">${ICON.phone}</span>` : ""}
+              ${officeTel ? `<span class="row-icon call" data-act="call" data-tel="${esc(officeTel)}" title="拨打">${ICON.phone}</span>` : ""}
             </span>
           </div>
         </div>
@@ -961,7 +967,7 @@
     const clear = () => { clearTimeout(timer); timer = 0; pid = null; fired = false; };
     el.addEventListener("pointerdown", (e) => {
       const num = e.target.closest('.info-value.link[data-act="call"]');
-      if (!num || !num.dataset.tel) return;
+      if (!num || !(num.dataset.copy || num.dataset.tel)) return;
       if (e.pointerType === "mouse" && e.button !== 0) return;
       if (pid != null && pid !== e.pointerId) { clear(); return; }   // 多点触控作废
       pid = e.pointerId; px = e.clientX; py = e.clientY; fired = false;
@@ -970,7 +976,7 @@
         fired = true;
         haptic(12);
         suppressNextClick();
-        openNumberSheet(num.dataset.tel);
+        openNumberSheet(num.dataset.copy || num.dataset.tel);
       }, MS);
     }, true);
     el.addEventListener("pointermove", (e) => {
@@ -1266,7 +1272,9 @@
       if (m.position) lines.push("TITLE:" + vcfEscape(m.position));
       lines.push("ORG:" + vcfEscape(org) + ";" + (dept ? vcfEscape(dept.name) : ""));
       if (m.mobilePhone) lines.push("TEL;TYPE=CELL:" + m.mobilePhone);
-      if (m.officePhone) lines.push("TEL;TYPE=WORK,VOICE:" + m.officePhone);
+      phoneTargets(m.officePhone).forEach((number) => {
+        lines.push("TEL;TYPE=WORK,VOICE:" + number);
+      });
       lines.push("END:VCARD");
       return lines.map(vcfFold).join("\r\n");
     });

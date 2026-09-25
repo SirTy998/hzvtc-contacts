@@ -1,5 +1,5 @@
 /* 通讯录 PWA Service Worker —— 离线缓存 app shell */
-const CACHE = "hzvtc-contacts-v4";
+const CACHE = "hzvtc-contacts-v5";
 const ASSETS = [
   "./",
   "./index.html",
